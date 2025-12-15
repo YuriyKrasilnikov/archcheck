@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "archcheck"
 version = "0.1.0"
-description = "Python architecture testing framework with deep AST analysis"
+description = "Extensible framework for static + runtime architecture analysis (Python 3.14)"
 authors = [{name = "Yuriy Krasilnikov"}]
 license = {text = "MIT"}
 readme = "README.md"
@@ -18,7 +18,11 @@ keywords = [
     "hexagonal",
     "dependency-injection",
     "static-analysis",
+    "runtime-analysis",
     "code-quality",
+    "sys-monitoring",
+    "call-graph",
+    "extensible",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -104,6 +108,9 @@ select = [
     "PT",  # pytest style
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]  # Allow assert in tests
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
@@ -154,6 +161,9 @@ warn_unused_ignores = true
 warn_no_return = true
 
 [tool.mutmut]
-paths_to_mutate = ["src/archcheck/domain/"]
+paths_to_mutate = [
+    "src/archcheck/domain/",
+    "src/archcheck/infrastructure/analyzers/",
+]
 pytest_add_cli_args_test_selection = ["tests/"]
 also_copy = ["src/"]

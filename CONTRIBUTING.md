@@ -1,151 +1,228 @@
 # Contributing to archcheck
 
-Thank you for your interest in contributing to archcheck!
-
 ## Philosophy
 
-Before contributing, understand the core philosophy:
-
 ```
-FAIL-FIRST: Invalid → Exception immediately
-NO FALLBACKS: No "let's try another way"
-NO LEGACY: Modern Python 3.14+
-MAXIMUM PURITY: Pure core, dirty periphery
-```
-
-## Getting Started
-
-1. **Fork the repository** on GitHub
-2. **Clone your fork** locally:
-   ```bash
-   git clone https://github.com/YourUsername/archcheck.git
-   cd archcheck
-   ```
-
-3. **Set up development environment**:
-   ```bash
-   make dev-setup
-   ```
-
-4. **Create a feature branch**:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-## Development Workflow
-
-### Running Tests
-
-```bash
-# All tests
-make test
-
-# Unit tests only
-make test-unit
-
-# Integration tests
-make test-integration
-```
-
-### Code Quality
-
-Before committing, ensure your code passes all checks:
-
-```bash
-# Format code
-make format
-
-# Run linters
-make lint
-
-# Type checking
-make type-check
-```
-
-### Code Style
-
-- **Python 3.14+ only** — use modern Python features
-- **Type hints required** — strict mypy mode
-- **Line length**: 100 characters
-- **No ignore rules** — fix issues, don't suppress them
-- **Docstrings**: Google style for public APIs
-
-Example:
-```python
-def check_import_rule(
-    module: Module,
-    forbidden: frozenset[str],
-) -> RuleResult:
-    """Check module imports against forbidden patterns.
-
-    Args:
-        module: Module to check
-        forbidden: Set of forbidden import patterns
-
-    Returns:
-        Result containing any violations found
-
-    Raises:
-        ParsingError: If module AST is invalid
-    """
-    ...
+FAIL-FIRST       : Invalid → Exception immediately, NO fallbacks
+DISCOVER > HARDCODE : dir(builtins), filesystem, graphlib — NOT hardcoded lists
+EXTENSIBLE       : Protocol + Composition for users, Registry for developers
+IMMUTABLE        : frozen dataclasses, tuple, frozenset everywhere
+NO type: ignore  : Fix types, don't suppress
 ```
 
 ## Architecture
 
-archcheck follows Hexagonal Architecture and verifies itself:
+### Three-Layer Data Architecture
+
+```
+Layer 1: DYNAMIC (archcheck discovers, ALWAYS works)
+         discover_layers(), StaticCallGraph, RuntimeCallGraph
+
+Layer 2: CONFIGURATION (user optional)
+         ArchitectureConfig — None = disabled, {...} = enabled
+
+Layer 3: RULES (archcheck validates, adapts to config)
+         validators activated by config fields
+```
+
+### Hexagonal Structure
 
 ```
 src/archcheck/
-├── domain/           # Pure core (no external deps)
-│   ├── model/        # Module, Class, Function, Rule, Violation
-│   ├── rules/        # Import, Naming, Purity, DI rules
-│   ├── predicates/   # Reusable predicates
-│   ├── exceptions/   # Domain exceptions
-│   └── ports/        # ABC interfaces
-├── application/      # Use cases, services
-├── infrastructure/   # Adapters, analyzers
-├── presentation/     # pytest plugin, Fluent API
-└── shared/           # Common utilities
+├── domain/           # Pure core (stdlib only)
+│   ├── model/        # Types: CallSite, LayerViolation, ArchitectureConfig
+│   ├── ports/        # Protocols: VisitorProtocol, ValidatorProtocol, ReporterProtocol
+│   ├── predicates/   # Specification pattern
+│   └── exceptions/   # Domain exceptions
+│
+├── application/      # Business logic
+│   ├── discovery/    # Layer 1: discover_layers, load_known_libs
+│   ├── collectors/   # Layer 1: sys.monitoring, asyncio.capture_call_graph
+│   ├── static_analysis/  # Layer 1: AST-based analysis
+│   ├── merge/        # MergedCallGraph = AST + Runtime
+│   ├── validators/   # Layer 3: CycleValidator, BoundaryValidator, etc.
+│   ├── visitors/     # AST visitors
+│   ├── reporters/    # PlainTextReporter, JSONReporter
+│   └── services/     # ArchChecker facade
+│
+├── infrastructure/   # Adapters
+│   ├── analyzers/    # AST analyzers
+│   └── adapters/     # Parser adapters
+│
+└── presentation/     # User-facing
+    ├── pytest_plugin/
+    └── dsl/          # Fluent API
 ```
 
-**Dependency rules:**
-- `domain` → only stdlib
-- `application` → domain
-- `infrastructure` → domain, application
-- `presentation` → all
+## Extensibility
 
-## Testing Guidelines
+### For Users (Protocol + Composition)
 
-- **Write tests first** (TDD encouraged)
-- **Unit tests**: Domain must have >90% coverage
-- **Use fixtures**: Share test data via pytest fixtures
-- **No mocks in domain tests** — domain is pure
+Users extend archcheck by:
+1. Implementing Protocol (VisitorProtocol, ValidatorProtocol, ReporterProtocol)
+2. Passing instances to ArchChecker constructor
+
+```python
+# User implements
+class MyValidator:
+    category = RuleCategory.CUSTOM
+
+    def validate(self, graph, config) -> tuple[Violation, ...]:
+        ...
+
+    @classmethod
+    def from_config(cls, config, registry=None) -> Self | None:
+        if config.extras.get("my_feature") is None:
+            return None  # disabled
+        return cls()
+
+# User uses
+checker = ArchChecker(
+    codebase,
+    validators=[*default_validators(), MyValidator()],
+)
+```
+
+### For Developers (Registry Pattern)
+
+Adding new component:
+
+**Add Validator:**
+```
+1. application/validators/[name]_validator.py — create file
+2. application/validators/_registry.py:
+   + from .new_validator import NewValidator
+   + _ALL_VALIDATORS += (NewValidator,)
+3. domain/model/configuration.py — add config field (optional)
+4. tests/
+```
+
+**Add Visitor:**
+```
+1. application/visitors/[name]_visitor.py — create file
+2. application/visitors/_registry.py — add to tuple
+3. tests/
+```
+
+**Add Collector:**
+```
+1. application/collectors/[name]_collector.py
+2. domain/model/[graph_type].py — new type
+3. application/collectors/combined.py — integrate
+4. tests/
+```
+
+**Add Domain Type:**
+```
+1. domain/model/[name].py — frozen dataclass with FAIL-FIRST __post_init__
+2. domain/model/__init__.py — re-export
+3. tests/
+```
+
+## Code Style
+
+### FAIL-FIRST Validation
+
+```python
+@dataclass(frozen=True, slots=True)
+class CallSite:
+    module: str
+    function: str
+    line: int
+
+    def __post_init__(self) -> None:
+        if not self.module:
+            raise ValueError("module must not be empty")
+        if not self.function:
+            raise ValueError("function must not be empty")
+        if self.line < 1:
+            raise ValueError("line must be >= 1")
+```
+
+### Discover Instead of Hardcode
+
+```python
+# BAD: hardcoded
+_BUILTINS = frozenset({"abs", "all", "any", ...})  # 100+ lines
+
+# GOOD: discover
+import builtins
+_BUILTINS = frozenset(dir(builtins)) | _TYPE_HINT_NAMES
+```
+
+### Use stdlib
+
+```python
+# BAD: custom Tarjan
+def detect_cycles(graph): ...  # 50 lines
+
+# GOOD: stdlib graphlib
+from graphlib import TopologicalSorter, CycleError
+
+def detect_cycles(graph):
+    ts = TopologicalSorter(adjacency)
+    try:
+        tuple(ts.static_order())
+        return ()
+    except CycleError as e:
+        return (frozenset(e.args[1]),)
+```
+
+### Protocol over ABC
+
+```python
+# Prefer Protocol for duck typing
+class ValidatorProtocol(Protocol):
+    category: RuleCategory
+
+    def validate(self, graph, config) -> tuple[Violation, ...]: ...
+
+    @classmethod
+    def from_config(cls, config, registry=None) -> Self | None: ...
+```
+
+## Development Workflow
+
+```bash
+# Setup
+make dev-setup
+
+# Tests
+make test          # all
+make test-unit     # unit only
+make test-mut      # mutation testing
+
+# Quality
+make lint          # ruff
+make type-check    # mypy --strict
+make format        # ruff format
+
+# All checks
+make check         # lint + type-check + test
+```
 
 ## Commit Messages
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
-feat: add purity analyzer for function side-effects
-fix: handle nested class inheritance resolution
-docs: add hexagonal architecture example
-test: add tests for DI rule violations
-refactor: extract predicate composition
-perf: cache AST parsing results
+feat(validators): add CohesionValidator for class width checks
+fix(collectors): handle thread-safety in RuntimeCallGraph
+refactor(domain): extract CallSite from RuntimeCallGraph
+test(validators): add tests for DIAwareValidator
+docs: update README with three-layer architecture
 ```
 
-## Pull Request Process
+## Pull Request Checklist
 
-1. **Update tests** — ensure all tests pass
-2. **Run all checks** — `make lint` must pass
-3. **Write clear PR description**
-4. **Link related issues**
-
-## Questions?
-
-- Open an [issue](https://github.com/YuriyKrasilnikov/archcheck/issues)
-- Start a [discussion](https://github.com/YuriyKrasilnikov/archcheck/discussions)
+- [ ] Tests pass (`make test`)
+- [ ] Type check passes (`make type-check`)
+- [ ] Lint passes (`make lint`)
+- [ ] 100% coverage for new code
+- [ ] FAIL-FIRST validation in new types
+- [ ] Protocol-based if adding new extension point
+- [ ] Registry updated if adding new validator/visitor
+- [ ] Documentation updated
 
 ## License
 

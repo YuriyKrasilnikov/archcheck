@@ -1,4 +1,4 @@
-.PHONY: help install dev-setup test test-unit test-integration lint format type-check clean build publish benchmark deps deps-upgrade deps-sync
+.PHONY: help install dev-setup test test-unit test-integration lint format type-check check clean build publish benchmark deps deps-upgrade deps-sync
 
 help:
 	@echo "archcheck development commands:"
@@ -16,6 +16,7 @@ help:
 	@echo "  make lint          - Run linters (ruff check + mypy)"
 	@echo "  make format        - Format code with ruff"
 	@echo "  make type-check    - Run mypy type checking"
+	@echo "  make check         - Run all checks (lint + type-check + test)"
 	@echo ""
 	@echo "Build & Publish:"
 	@echo "  make clean         - Remove build artifacts"
@@ -75,6 +76,9 @@ format:
 type-check:
 	@echo "Running mypy type checker..."
 	uv run mypy src/archcheck
+
+check: lint type-check test
+	@echo "All checks passed!"
 
 clean:
 	@echo "Cleaning build artifacts..."

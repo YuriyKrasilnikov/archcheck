@@ -47,16 +47,16 @@ body:
       required: true
 
   - type: textarea
-    id: schema
+    id: code
     attributes:
-      label: XSD Schema (if applicable)
-      description: The XSD schema that triggers the bug.
-      render: xml
+      label: Code Sample (if applicable)
+      description: Code that triggers the bug.
+      render: python
 
   - type: input
     id: version
     attributes:
-      label: XSDMesh Version
+      label: archcheck Version
       placeholder: e.g., 0.1.0
     validations:
       required: true
