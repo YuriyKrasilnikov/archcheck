@@ -323,9 +323,7 @@ def _collect_static_edges(
     for call in func.body_calls:
         if call.is_resolved and call.resolved_fqn is not None:
             key = (func.qualified_name, call.resolved_fqn)
-            edge_data.setdefault(key, []).append(
-                (func.location.file, call.line, call.call_type)
-            )
+            edge_data.setdefault(key, []).append((func.location.file, call.line, call.call_type))
 
 
 def _extract_module_imports(codebase: Codebase) -> Mapping[str, frozenset[str]]:

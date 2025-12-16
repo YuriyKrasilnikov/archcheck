@@ -1,17 +1,18 @@
 """Real architecture test: archcheck testing itself."""
 
+from pathlib import Path
+
 import pytest
 
-from archcheck.infrastructure.adapters.ast_parser import ASTSourceParser
 from archcheck.application.merge import build_static_merged_graph
+from archcheck.domain.model.codebase import Codebase
+from archcheck.infrastructure.adapters.ast_parser import ASTSourceParser
 from archcheck.presentation.api.dsl import ArchCheck
 
 
 @pytest.fixture(scope="module")
-def archcheck_codebase():
+def archcheck_codebase() -> Codebase:
     """Parse archcheck source code."""
-    from pathlib import Path
-
     src_path = Path(__file__).parent.parent.parent / "src"
     archcheck_path = src_path / "archcheck"
     parser = ASTSourceParser(root_path=src_path)
@@ -19,13 +20,13 @@ def archcheck_codebase():
 
 
 @pytest.fixture(scope="module")
-def arch(archcheck_codebase):
+def arch(archcheck_codebase: Codebase) -> ArchCheck:
     """ArchCheck for archcheck itself."""
     return ArchCheck(archcheck_codebase)
 
 
 @pytest.fixture(scope="module")
-def arch_with_graph(archcheck_codebase):
+def arch_with_graph(archcheck_codebase: Codebase) -> ArchCheck:
     """ArchCheck with graph for edge queries."""
     graph = build_static_merged_graph(archcheck_codebase)
     return ArchCheck(archcheck_codebase, graph)
@@ -98,12 +99,7 @@ class TestArchcheckEdges:
 
     def test_domain_to_infrastructure_edges_count(self, arch_with_graph: ArchCheck) -> None:
         """Count how many domain → infrastructure edges exist."""
-        edges = (
-            arch_with_graph.edges()
-            .from_layer("domain")
-            .to_layer("infrastructure")
-            .execute()
-        )
+        edges = arch_with_graph.edges().from_layer("domain").to_layer("infrastructure").execute()
         # Domain should have zero direct dependencies on infrastructure
         assert len(edges) == 0, f"Found {len(edges)} domain → infrastructure edges"
 

@@ -192,9 +192,7 @@ class ModuleQuery:
             Filtered ModuleQuery
         """
         # Match exact prefix or prefix + dot
-        return self._with_filter(
-            lambda m: m.name == prefix or m.name.startswith(prefix + ".")
-        )
+        return self._with_filter(lambda m: m.name == prefix or m.name.startswith(prefix + "."))
 
     def matching(self, pattern: str) -> ModuleQuery:
         """Filter modules by name pattern.
@@ -452,9 +450,7 @@ class ClassQuery:
             Filtered ClassQuery
         """
         compiled = compile_pattern(base)
-        return self._with_filter(
-            lambda c: any(compiled.match(b) for b in c.bases)
-        )
+        return self._with_filter(lambda c: any(compiled.match(b) for b in c.bases))
 
     def that(self, predicate: Callable[[Class], bool]) -> ClassQuery:
         """Filter by custom predicate.
@@ -656,9 +652,7 @@ class FunctionQuery:
             Filtered FunctionQuery
         """
         compiled = compile_pattern(module)
-        return self._with_filter(
-            lambda f: compiled.match(f.qualified_name.rsplit(".", 1)[0])
-        )
+        return self._with_filter(lambda f: compiled.match(f.qualified_name.rsplit(".", 1)[0]))
 
     def matching(self, pattern: str) -> FunctionQuery:
         """Filter functions by qualified name pattern.
@@ -907,9 +901,7 @@ class EdgeQuery:
         Returns:
             Filtered EdgeQuery with only cross-layer edges
         """
-        return self._with_filter(
-            lambda e: get_layer(e.caller_fqn) != get_layer(e.callee_fqn)
-        )
+        return self._with_filter(lambda e: get_layer(e.caller_fqn) != get_layer(e.callee_fqn))
 
     def with_nature(self, nature: EdgeNature) -> EdgeQuery:
         """Filter edges by nature.

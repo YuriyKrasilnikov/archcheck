@@ -9,12 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Presentation Layer (Fluent DSL)**
+- `ArchCheck` entry point with `modules()`, `classes()`, `functions()`, `edges()`
+- `ModuleQuery` / `ModuleAssertion` — module-level checks
+- `ClassQuery` / `ClassAssertion` — class-level checks
+- `FunctionQuery` / `FunctionAssertion` — function-level checks
+- `EdgeQuery` / `EdgeAssertion` — call graph edge checks
+- Pattern matching (`*`, `**`, `?`) with `compile_pattern()`
+- Query filters: `in_layer()`, `in_package()`, `matching()`, `named()`, `that()`
+- Assertions: `not_import()`, `only_import()`, `be_in_layer()`, `extend()`, `implement()`
+- Edge filters: `from_layer()`, `to_layer()`, `crossing_boundary()`, `direct_only()`
+- Edge assertions: `not_cross_boundary()`, `be_allowed()`
+- Execution: `assert_check()`, `collect()`, `is_valid()`
+
+**pytest Plugin**
+- `arch` fixture — ArchCheck for static analysis
+- `arch_with_graph` fixture — ArchCheck with MergedCallGraph (edges support)
+- `arch_checker` fixture — ArchChecker facade for graph-level validation
+- `arch_codebase` fixture — parsed Codebase
+- `arch_config` fixture — user-overridable ArchitectureConfig
+- `arch_merged_graph` fixture — static-only MergedCallGraph
+- INI options: `arch_source_dir`, `arch_package`
+
+**Infrastructure**
+- `build_static_merged_graph()` — build MergedCallGraph from static analysis only
+- `FrozenRuntimeCallGraph.empty()` — factory for static-only analysis
+
 **Architecture**
 - Three-layer data architecture (Dynamic → Config → Rules)
 - Extensibility via Protocol + Composition pattern
 - Registry pattern for internal extensibility
 
-**Edge Architecture (Phase 3)**
+**Edge Architecture**
 - `EdgeNature` enum: DIRECT, PARAMETRIC, INHERITED, FRAMEWORK
 - `CallInstance` — single call with Location, CallType, count
 - `FunctionEdge` — edge between functions with nature classification
@@ -29,7 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `EdgeClassifier` — classifies edge nature based on imports and frameworks
 - `build_module_imports()` — extracts imports per module from Codebase
 
-**Domain Types (Phase 1.1)**
+**Domain Types**
 - Runtime types: CallSite, LibCallSite, CalleeKind, CalleeInfo
 - Runtime graphs: RuntimeCallGraph (thread-safe), AsyncCallGraph, CombinedCallGraph
 - Merged types: MergedCallGraph, HiddenDep, HiddenDepType, EntryPointCategories

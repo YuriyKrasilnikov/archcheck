@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 
 from archcheck.domain.exceptions.violation import ArchitectureViolationError
-from archcheck.domain.model.codebase import Codebase
 from archcheck.domain.model.class_ import Class
+from archcheck.domain.model.codebase import Codebase
 from archcheck.domain.model.enums import Visibility
 from archcheck.domain.model.function import Function
 from archcheck.domain.model.location import Location
@@ -205,12 +205,7 @@ class TestClassQueryFilters:
         codebase = make_codebase(m1, m2)
         arch = ArchCheck(codebase)
 
-        result = (
-            arch.classes()
-            .in_layer("domain")
-            .named("*Repository")
-            .execute()
-        )
+        result = arch.classes().in_layer("domain").named("*Repository").execute()
 
         assert len(result) == 1
         assert result[0] is c1
@@ -337,10 +332,7 @@ class TestClassAssertionHaveMaxMethods:
 
     def test_violation_when_over_limit(self) -> None:
         """Violation when public methods > limit."""
-        methods = tuple(
-            make_method(f"m{i}", f"myapp.User.m{i}")
-            for i in range(10)
-        )
+        methods = tuple(make_method(f"m{i}", f"myapp.User.m{i}") for i in range(10))
         c = make_class("User", "myapp.User", methods=methods)
         assertion = ClassAssertion(_classes=(c,))
 

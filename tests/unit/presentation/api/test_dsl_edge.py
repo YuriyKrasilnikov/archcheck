@@ -14,7 +14,6 @@ from archcheck.domain.model.entry_points import EntryPointCategories
 from archcheck.domain.model.function_edge import FunctionEdge
 from archcheck.domain.model.location import Location
 from archcheck.domain.model.merged_call_graph import MergedCallGraph
-from archcheck.domain.model.module import Module
 from archcheck.presentation.api.dsl import ArchCheck, EdgeAssertion, EdgeQuery
 
 
@@ -166,11 +165,7 @@ class TestEdgeQueryFilters:
         graph = make_graph(e1, e2, e3)
 
         result = (
-            EdgeQuery.create(graph)
-            .from_layer("domain")
-            .crossing_boundary()
-            .direct_only()
-            .execute()
+            EdgeQuery.create(graph).from_layer("domain").crossing_boundary().direct_only().execute()
         )
 
         assert len(result) == 1
@@ -316,13 +311,7 @@ class TestEdgeFluentChaining:
         }
 
         # Should not raise
-        (
-            arch.edges()
-            .direct_only()
-            .should()
-            .be_allowed(allowed)
-            .assert_check()
-        )
+        (arch.edges().direct_only().should().be_allowed(allowed).assert_check())
 
     def test_full_chain_fail(self) -> None:
         """Full fluent chain fails with invalid architecture."""
@@ -332,9 +321,4 @@ class TestEdgeFluentChaining:
         arch = ArchCheck(codebase, graph)
 
         with pytest.raises(ArchitectureViolationError):
-            (
-                arch.edges()
-                .should()
-                .not_cross_boundary()
-                .assert_check()
-            )
+            (arch.edges().should().not_cross_boundary().assert_check())

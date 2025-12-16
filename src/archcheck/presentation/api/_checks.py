@@ -98,8 +98,7 @@ def check_module_in_layer(
         return Violation(
             rule_name="be_in_layer",
             message=(
-                f"module '{module.name}' is in layer '{actual_layer}', "
-                f"expected '{expected_layer}'"
+                f"module '{module.name}' is in layer '{actual_layer}', expected '{expected_layer}'"
             ),
             location=Location(file=module.path, line=1, column=0),
             severity=Severity.ERROR,
@@ -123,8 +122,10 @@ def make_no_import_check(
     Returns:
         Check function that takes Module and returns Violation | None
     """
+
     def check(module: Module) -> Violation | None:
         return check_no_import(module, patterns)
+
     return check
 
 
@@ -139,8 +140,10 @@ def make_only_import_check(
     Returns:
         Check function that takes Module and returns Violation | None
     """
+
     def check(module: Module) -> Violation | None:
         return check_only_import(module, patterns)
+
     return check
 
 
@@ -155,8 +158,10 @@ def make_in_layer_check(
     Returns:
         Check function that takes Module and returns Violation | None
     """
+
     def check(module: Module) -> Violation | None:
         return check_module_in_layer(module, layer)
+
     return check
 
 
@@ -183,8 +188,7 @@ def check_class_in_layer(
         return Violation(
             rule_name="be_in_layer",
             message=(
-                f"class '{cls.name}' is in layer '{actual_layer}', "
-                f"expected '{expected_layer}'"
+                f"class '{cls.name}' is in layer '{actual_layer}', expected '{expected_layer}'"
             ),
             location=cls.location,
             severity=Severity.ERROR,
@@ -294,8 +298,10 @@ def make_class_in_layer_check(
     layer: str,
 ) -> Callable[[Class], Violation | None]:
     """Create class in_layer check with bound layer."""
+
     def check(cls: Class) -> Violation | None:
         return check_class_in_layer(cls, layer)
+
     return check
 
 
@@ -303,8 +309,10 @@ def make_class_extends_check(
     pattern: CompiledPattern,
 ) -> Callable[[Class], Violation | None]:
     """Create class extends check with bound pattern."""
+
     def check(cls: Class) -> Violation | None:
         return check_class_extends(cls, pattern)
+
     return check
 
 
@@ -312,8 +320,10 @@ def make_class_implements_check(
     pattern: CompiledPattern,
 ) -> Callable[[Class], Violation | None]:
     """Create class implements check with bound pattern."""
+
     def check(cls: Class) -> Violation | None:
         return check_class_implements(cls, pattern)
+
     return check
 
 
@@ -321,8 +331,10 @@ def make_class_max_methods_check(
     max_methods: int,
 ) -> Callable[[Class], Violation | None]:
     """Create class max_methods check with bound limit."""
+
     def check(cls: Class) -> Violation | None:
         return check_class_max_methods(cls, max_methods)
+
     return check
 
 
@@ -349,8 +361,7 @@ def check_function_in_layer(
         return Violation(
             rule_name="be_in_layer",
             message=(
-                f"function '{func.name}' is in layer '{actual_layer}', "
-                f"expected '{expected_layer}'"
+                f"function '{func.name}' is in layer '{actual_layer}', expected '{expected_layer}'"
             ),
             location=func.location,
             severity=Severity.ERROR,
@@ -427,8 +438,10 @@ def make_function_in_layer_check(
     layer: str,
 ) -> Callable[[Function], Violation | None]:
     """Create function in_layer check with bound layer."""
+
     def check(func: Function) -> Violation | None:
         return check_function_in_layer(func, layer)
+
     return check
 
 
@@ -436,8 +449,10 @@ def make_function_no_call_check(
     patterns: tuple[CompiledPattern, ...],
 ) -> Callable[[Function], Violation | None]:
     """Create function no_call check with bound patterns."""
+
     def check(func: Function) -> Violation | None:
         return check_function_no_call(func, patterns)
+
     return check
 
 
@@ -445,8 +460,10 @@ def make_function_only_call_check(
     patterns: tuple[CompiledPattern, ...],
 ) -> Callable[[Function], Violation | None]:
     """Create function only_call check with bound patterns."""
+
     def check(func: Function) -> Violation | None:
         return check_function_only_call(func, patterns)
+
     return check
 
 
@@ -536,6 +553,8 @@ def make_edge_be_allowed_check(
     allowed_imports: Mapping[str, frozenset[str]],
 ) -> Callable[[FunctionEdge], Violation | None]:
     """Create edge be_allowed check with bound config."""
+
     def check(edge: FunctionEdge) -> Violation | None:
         return check_edge_be_allowed(edge, allowed_imports)
+
     return check

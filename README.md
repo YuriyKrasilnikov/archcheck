@@ -74,19 +74,37 @@ assert result.passed
 ### Fluent DSL
 
 ```python
-from archcheck import ArchCheck
+# test_architecture.py
+def test_domain_isolation(arch):
+    """Domain layer must not import infrastructure."""
+    arch.modules().in_layer("domain").should().not_import(
+        "myapp.infrastructure.**"
+    ).assert_check()
 
-def test_domain_isolation(arch: ArchCheck) -> None:
-    (
-        arch.modules()
-        .in_package("myapp.domain.**")
+def test_repositories_in_infrastructure(arch):
+    """All *Repository classes must be in infrastructure layer."""
+    arch.classes().named("*Repository").should().be_in_layer(
+        "infrastructure"
+    ).assert_check()
+
+def test_async_handlers_in_handlers(arch):
+    """All async functions must be in handlers layer."""
+    arch.functions().async_only().should().be_in_layer(
+        "handlers"
+    ).assert_check()
+
+def test_no_cross_layer_calls(arch_with_graph):
+    """Domain must not call infrastructure directly."""
+    violations = (
+        arch_with_graph.edges()
+        .from_layer("domain")
+        .to_layer("infrastructure")
+        .direct_only()
         .should()
-        .not_import("myapp.infrastructure.**")
-        .assert_check()
+        .not_cross_boundary()
+        .collect()
     )
-
-def test_no_cycles(arch: ArchCheck) -> None:
-    arch.modules().should().have_no_cycles().assert_check()
+    assert len(violations) == 0
 ```
 
 ## Extensibility
@@ -161,28 +179,70 @@ Layer 3: RULES (archcheck validates, adapts to config)
 
 ## pytest Integration
 
+```ini
+# pytest.ini or pyproject.toml
+[tool.pytest.ini_options]
+arch_source_dir = "src/myapp"
+arch_package = "myapp"
+```
+
 ```python
 # conftest.py
 import pytest
-from archcheck import ArchChecker, ArchitectureConfig
-from archcheck.reporters import PlainTextReporter
+from archcheck import ArchitectureConfig
 
 @pytest.fixture(scope="session")
 def arch_config() -> ArchitectureConfig:
+    """Override default config with your architecture rules."""
     return ArchitectureConfig(
-        allowed_imports={...},
+        allowed_imports={
+            "domain": frozenset(),
+            "application": frozenset({"domain"}),
+            "infrastructure": frozenset({"domain", "application"}),
+        },
         pure_layers=frozenset({"domain"}),
+        known_frameworks=frozenset({"pytest", "fastapi"}),
     )
+```
 
-@pytest.fixture(scope="session")
-def arch_reporter() -> ReporterProtocol:
-    return PlainTextReporter()  # or user's RichReporter()
-
+```python
 # test_architecture.py
-def test_architecture(arch: ArchChecker) -> None:
-    result = arch.check()
+
+def test_hexagonal_layers(arch):
+    """Verify hexagonal architecture layers."""
+    # Domain imports nothing from other layers
+    arch.modules().in_layer("domain").should().not_import(
+        "myapp.application.**", "myapp.infrastructure.**"
+    ).assert_check()
+
+    # Application doesn't import infrastructure
+    arch.modules().in_layer("application").should().not_import(
+        "myapp.infrastructure.**"
+    ).assert_check()
+
+def test_edge_boundaries(arch_with_graph):
+    """Verify call graph respects layer boundaries."""
+    arch_with_graph.edges().crossing_boundary().should().be_allowed({
+        "application": frozenset({"domain"}),
+        "infrastructure": frozenset({"domain", "application"}),
+    }).assert_check()
+
+def test_graph_level_validation(arch_checker):
+    """Run all validators (cycles, boundaries, DI-aware)."""
+    result = arch_checker.check()
     assert result.passed, f"Violations: {result.violations}"
 ```
+
+### Available Fixtures
+
+| Fixture | Description |
+|---------|-------------|
+| `arch` | ArchCheck for static analysis (modules, classes, functions) |
+| `arch_with_graph` | ArchCheck with MergedCallGraph (supports edges()) |
+| `arch_checker` | ArchChecker facade for graph-level validation |
+| `arch_codebase` | Parsed Codebase |
+| `arch_config` | ArchitectureConfig (override in conftest.py) |
+| `arch_merged_graph` | Static-only MergedCallGraph |
 
 ## Comparison
 

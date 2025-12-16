@@ -7,8 +7,8 @@ import pytest
 from archcheck.domain.exceptions.violation import ArchitectureViolationError
 from archcheck.domain.model.call_info import CallInfo
 from archcheck.domain.model.call_type import CallType
-from archcheck.domain.model.codebase import Codebase
 from archcheck.domain.model.class_ import Class
+from archcheck.domain.model.codebase import Codebase
 from archcheck.domain.model.enums import Visibility
 from archcheck.domain.model.function import Function
 from archcheck.domain.model.location import Location
@@ -247,12 +247,7 @@ class TestFunctionQueryFilters:
         codebase = make_codebase(m1, m2)
         arch = ArchCheck(codebase)
 
-        result = (
-            arch.functions()
-            .in_layer("handlers")
-            .async_only()
-            .execute()
-        )
+        result = arch.functions().in_layer("handlers").async_only().execute()
 
         assert len(result) == 1
         assert result[0] is f1
@@ -337,9 +332,7 @@ class TestFunctionAssertionOnlyCall:
         f = make_function(
             "foo",
             "myapp.foo",
-            body_calls=(
-                make_call_info("allowed", "myapp.helpers.allowed"),
-            ),
+            body_calls=(make_call_info("allowed", "myapp.helpers.allowed"),),
         )
         assertion = FunctionAssertion(_functions=(f,))
 
@@ -456,9 +449,4 @@ class TestFunctionFluentChaining:
         arch = ArchCheck(codebase)
 
         with pytest.raises(ArchitectureViolationError):
-            (
-                arch.functions()
-                .should()
-                .not_call("external.**")
-                .assert_check()
-            )
+            (arch.functions().should().not_call("external.**").assert_check())

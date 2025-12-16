@@ -156,12 +156,7 @@ class TestModuleQueryFilters:
         codebase = make_codebase(m1, m2, m3)
         arch = ArchCheck(codebase)
 
-        result = (
-            arch.modules()
-            .in_layer("domain")
-            .that(lambda m: "user" in m.name)
-            .execute()
-        )
+        result = arch.modules().in_layer("domain").that(lambda m: "user" in m.name).execute()
 
         assert len(result) == 1
         assert result[0] is m1
