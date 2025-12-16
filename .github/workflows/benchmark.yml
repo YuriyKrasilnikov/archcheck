@@ -30,31 +30,26 @@ jobs:
         run: uv sync --group benchmark
 
       - name: Run benchmarks
-        run: |
-          uv run python scripts/benchmark.py --output benchmark-results.json
+        run: uv run python scripts/benchmark.py --output benchmark-results.json
 
+      # Download previous benchmark data from cache
+      - name: Download previous benchmark data
+        uses: actions/cache@v4
+        with:
+          path: ./cache
+          key: ${{ runner.os }}-benchmark
+
+      # Compare results and store
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
-        if: github.event_name != 'pull_request'
         with:
           tool: "customSmallerIsBetter"
           output-file-path: benchmark-results.json
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: true
-          # Create gh-pages branch if not exists
-          gh-pages-branch: gh-pages
-          benchmark-data-dir-path: dev/bench
+          # Use external JSON file instead of gh-pages branch
+          external-data-json-path: ./cache/benchmark-data.json
           # Alert if performance degrades >110%
           alert-threshold: "110%"
-          comment-on-alert: true
           fail-on-alert: false
-
-      - name: Comment benchmark result on PR
-        uses: benchmark-action/github-action-benchmark@v1
-        if: github.event_name == 'pull_request'
-        with:
-          tool: "customSmallerIsBetter"
-          output-file-path: benchmark-results.json
+          # Comment on PR with results
+          comment-always: ${{ github.event_name == 'pull_request' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: false
-          comment-always: true
