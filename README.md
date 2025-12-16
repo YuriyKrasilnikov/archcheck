@@ -7,27 +7,54 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![mypy: strict](https://img.shields.io/badge/mypy-strict-blue.svg)](http://mypy-lang.org/)
 
-Extensible framework для статического + runtime анализа архитектуры Python 3.14.
+Architecture testing framework for Python 3.14. Static + Runtime analysis. Extensible via Protocols.
 
 ## Philosophy
 
-```
-FAIL-FIRST      : Invalid → Exception immediately, NO fallbacks
-DISCOVER > HARDCODE : dir(builtins), filesystem structure, graphlib
-EXTENSIBLE      : Protocol + Composition (user extends via conformance)
-IMMUTABLE       : frozen dataclasses, tuple, frozenset
-```
+| Principle | Implementation |
+|-----------|----------------|
+| **FAIL-FIRST** | Invalid input → Exception. No fallbacks. No "try another way". |
+| **NO LEGACY** | Python 3.14+ only. Uses `sys.monitoring` (PEP 669), `asyncio.capture_call_graph`, `graphlib`. |
+| **DISCOVER > HARDCODE** | Builtins via `dir(builtins)`. Layers from filesystem. Libs from requirements. |
+| **IMMUTABLE** | `frozen dataclasses`, `tuple`, `frozenset`, `MappingProxyType`. |
+| **COMPOSITION > INHERITANCE** | User extends via Protocol conformance, not subclassing. |
+| **EXPLICIT > MAGIC** | No decorators that change behavior. Config enables features explicitly. |
+| **THREAD-SAFE** | RuntimeCallGraph protected by Lock. Collectors are reentrant. |
 
 ## Features
 
-- **Three-layer data architecture** — Dynamic (always works) → Config (optional) → Rules (adapts)
-- **Static + Runtime analysis** — AST + sys.monitoring (PEP 669) + asyncio.capture_call_graph
-- **Extensible** — user adds visitors/validators/reporters via Protocol conformance
-- **DI-aware validation** — understands impl→interface through DI is OK
-- **Cycle detection** — via stdlib graphlib.TopologicalSorter
-- **MergedCallGraph** — AST structure + Runtime filter/counts + hidden deps detection
-- **pytest plugin** — fixtures, hooks, session reporting
-- **Fluent DSL** — arch.modules().should().not_import()
+```
+ANALYSIS
+├── Static     AST parsing → imports, classes, functions, calls
+├── Runtime    sys.monitoring (PEP 669) → actual call graph
+├── Async      asyncio.capture_call_graph → task dependencies
+└── Merged     Static structure + Runtime counts + Hidden deps
+
+EDGE CLASSIFICATION
+├── DIRECT      caller imports callee module
+├── PARAMETRIC  caller receives callee as parameter (HOF, callback)
+├── INHERITED   super().method() calls
+└── FRAMEWORK   framework calls app code (pytest→test, fastapi→handler)
+
+VALIDATION
+├── CycleValidator       graphlib.TopologicalSorter, always enabled
+├── BoundaryValidator    layer import rules, if config.allowed_imports
+├── DIAwareValidator     impl→interface via DI is OK, if registry available
+├── PurityValidator      no side effects in pure layers, if config.pure_layers
+└── CustomValidator      user-defined via ValidatorProtocol
+
+DSL (Fluent API)
+├── Queries      modules(), classes(), functions(), edges()
+├── Filters      in_layer(), matching(), named(), that(), async_only()
+├── Assertions   not_import(), be_in_layer(), not_cross_boundary()
+├── Execution    assert_check() | collect() | is_valid()
+└── Patterns     * (segment), ** (any), ? (char), .** (subtree)
+
+PYTEST INTEGRATION
+├── Fixtures     arch, arch_with_graph, arch_checker, arch_config
+├── Config       pytest.ini: arch_source_dir, arch_package
+└── Scope        session (parsed once, reused)
+```
 
 ## Installation
 
@@ -37,154 +64,147 @@ pip install archcheck
 
 ## Quick Start
 
-### Minimal (Layer 1 only — always works)
-
-```python
-from archcheck import ArchChecker
-
-# No config needed — cycles detection works
-checker = ArchChecker.with_defaults(codebase)
-result = checker.check()
-
-if not result.passed:
-    for v in result.violations:
-        print(v.message)
-```
-
-### With Configuration (Layer 2 enables features)
-
-```python
-from archcheck import ArchChecker, ArchitectureConfig
-
-config = ArchitectureConfig(
-    allowed_imports={
-        "domain": frozenset(),  # domain imports nothing
-        "services": frozenset({"domain", "interfaces"}),
-        "adapters": frozenset({"domain", "interfaces"}),
-    },
-    pure_layers=frozenset({"domain"}),
-    composition_root=frozenset({"myapp.core.container"}),
-)
-
-checker = ArchChecker.from_config(codebase, config)
-result = checker.check()
-assert result.passed
-```
-
-### Fluent DSL
-
 ```python
 # test_architecture.py
-def test_domain_isolation(arch):
-    """Domain layer must not import infrastructure."""
+
+def test_hexagonal_layers(arch):
+    """Domain must not import infrastructure."""
     arch.modules().in_layer("domain").should().not_import(
         "myapp.infrastructure.**"
     ).assert_check()
 
-def test_repositories_in_infrastructure(arch):
-    """All *Repository classes must be in infrastructure layer."""
+def test_repositories_naming(arch):
+    """*Repository classes must be in infrastructure."""
     arch.classes().named("*Repository").should().be_in_layer(
         "infrastructure"
     ).assert_check()
 
-def test_async_handlers_in_handlers(arch):
-    """All async functions must be in handlers layer."""
-    arch.functions().async_only().should().be_in_layer(
-        "handlers"
-    ).assert_check()
-
-def test_no_cross_layer_calls(arch_with_graph):
+def test_no_forbidden_calls(arch_with_graph):
     """Domain must not call infrastructure directly."""
-    violations = (
-        arch_with_graph.edges()
-        .from_layer("domain")
-        .to_layer("infrastructure")
-        .direct_only()
-        .should()
-        .not_cross_boundary()
-        .collect()
-    )
-    assert len(violations) == 0
+    arch_with_graph.edges().from_layer("domain").to_layer("infrastructure").should().not_cross_boundary().assert_check()
 ```
 
-## Extensibility
+## DSL Reference
 
-### User extends via Protocol conformance
+### Entry Points
 
 ```python
-# Custom visitor
-class PrintDetector:
-    def __init__(self) -> None:
-        self._violations: list[dict] = []
+from archcheck import ArchCheck
 
-    def visit(self, tree: ast.AST) -> None:
-        # detect print() calls
-        ...
-
-    @property
-    def violations(self) -> Sequence[dict]:
-        return self._violations
-
-# Custom reporter (user chooses output format)
-class RichReporter:
-    def report(self, result: CheckResult) -> None:
-        # use rich library for Tree/Table/Panel
-        ...
-
-# Usage
-checker = ArchChecker(
-    codebase,
-    visitors=[*default_visitors(), PrintDetector()],
-    reporter=RichReporter(),
-)
+arch = ArchCheck(codebase)                    # static analysis only
+arch = ArchCheck(codebase, merged_graph)      # with edge support
 ```
 
-### Config enables validators
+### Queries
 
-```python
-# None = feature disabled
-# frozenset() = enabled, empty = all OK
-# {...} = enabled with restrictions
+| Method | Returns | Operates on |
+|--------|---------|-------------|
+| `modules()` | `ModuleQuery` | `Module` |
+| `classes()` | `ClassQuery` | `Class` |
+| `functions()` | `FunctionQuery` | `Function` |
+| `edges()` | `EdgeQuery` | `FunctionEdge` (requires graph) |
 
-config = ArchitectureConfig(
-    allowed_imports=None,  # boundary checking disabled
-    pure_layers=frozenset({"domain"}),  # purity checking enabled
-    max_fan_out=10,  # coupling checking enabled
-)
-```
-
-## Three-Layer Data Architecture
+### Filters
 
 ```
-Layer 1: DYNAMIC (archcheck discovers, ALWAYS works)
-├─ discover_layers(app_dir) → frozenset[str]
-├─ discover_modules(app_dir) → frozenset[str]
-├─ load_known_libs(requirements_dir) → frozenset[str]
-├─ StaticCallGraph (AST)
-├─ RuntimeCallGraph (sys.monitoring)
-└─ AsyncCallGraph (asyncio.capture_call_graph)
+ModuleQuery
+├── in_layer(name)           module in layer
+├── in_package(prefix)       module.name.startswith(prefix)
+├── matching(pattern)        glob pattern on module.name
+└── that(predicate)          custom filter
 
-Layer 2: CONFIGURATION (user optional, enables features)
-├─ ArchitectureConfig.allowed_imports → BoundaryValidator
-├─ ArchitectureConfig.pure_layers → PurityValidator
-├─ ArchitectureConfig.max_fan_out → CouplingValidator
-└─ ArchitectureConfig.extras → user's CustomValidator
+ClassQuery
+├── in_layer(name)
+├── in_package(prefix)
+├── matching(pattern)
+├── named(pattern)           glob pattern on class.name only
+├── extending(base)          class extends base
+├── implementing(protocol)   class implements protocol
+└── that(predicate)
 
-Layer 3: RULES (archcheck validates, adapts to config)
-├─ ALWAYS: detect_cycles (graphlib.TopologicalSorter)
-├─ ALWAYS: build_merged_graph (AST + Runtime)
-├─ IF config.*: specific validators
-└─ OUTPUT: CheckResult (violations, coverage, merged_graph)
+FunctionQuery
+├── in_layer(name)
+├── in_module(pattern)
+├── matching(pattern)
+├── named(pattern)
+├── async_only()             only async functions
+├── methods_only()           only methods (not module-level)
+├── module_level_only()      only module-level (not methods)
+└── that(predicate)
+
+EdgeQuery
+├── from_layer(name)         caller in layer
+├── to_layer(name)           callee in layer
+├── crossing_boundary()      caller_layer ≠ callee_layer
+├── with_nature(nature)      EdgeNature filter
+├── direct_only()            nature == DIRECT
+└── that(predicate)
+```
+
+### Assertions
+
+```
+ModuleAssertion
+├── not_import(*patterns)    no imports matching patterns
+├── only_import(*patterns)   imports ONLY from patterns
+└── be_in_layer(name)
+
+ClassAssertion
+├── extend(base)             must extend base
+├── implement(protocol)      must implement protocol
+├── be_in_layer(name)
+└── have_max_methods(n)      ≤ n public methods
+
+FunctionAssertion
+├── not_call(*patterns)      no calls matching patterns
+├── only_call(*patterns)     calls ONLY to patterns
+└── be_in_layer(name)
+
+EdgeAssertion
+├── not_cross_boundary()     caller_layer == callee_layer
+└── be_allowed(mapping)      edge allowed by layer→layers mapping
+```
+
+### Execution
+
+| Method | Returns | Behavior |
+|--------|---------|----------|
+| `assert_check()` | `None` | Raises `ArchitectureViolationError` if violations |
+| `collect()` | `tuple[Violation, ...]` | Returns all violations |
+| `is_valid()` | `bool` | `True` if no violations |
+
+### Pattern Syntax
+
+```
+*     one segment (no dots)     foo.*.bar  → foo.x.bar ✓, foo.x.y.bar ✗
+**    any segments              foo.**     → foo ✓, foo.bar ✓, foo.bar.baz ✓
+?     one character             fo?        → foo ✓, fo ✗
+.**   module + all children     foo.**     → foo ✓, foo.bar ✓ (but not foobar)
 ```
 
 ## pytest Integration
 
-```ini
-# pytest.ini or pyproject.toml
+### Configuration
+
+```toml
+# pyproject.toml
 [tool.pytest.ini_options]
 arch_source_dir = "src/myapp"
 arch_package = "myapp"
 ```
+
+### Fixtures
+
+| Fixture | Type | Description |
+|---------|------|-------------|
+| `arch` | `ArchCheck` | Static analysis. `modules()`, `classes()`, `functions()`. |
+| `arch_with_graph` | `ArchCheck` | With MergedCallGraph. Supports `edges()`. |
+| `arch_checker` | `ArchChecker` | Facade. Runs validators (cycles, boundaries). |
+| `arch_codebase` | `Codebase` | Parsed source code. |
+| `arch_config` | `ArchitectureConfig` | Override in conftest.py. |
+| `arch_merged_graph` | `MergedCallGraph` | Static-only call graph. |
+
+### Custom Config
 
 ```python
 # conftest.py
@@ -193,70 +213,133 @@ from archcheck import ArchitectureConfig
 
 @pytest.fixture(scope="session")
 def arch_config() -> ArchitectureConfig:
-    """Override default config with your architecture rules."""
     return ArchitectureConfig(
         allowed_imports={
-            "domain": frozenset(),
-            "application": frozenset({"domain"}),
+            "domain": frozenset(),                              # imports nothing
+            "application": frozenset({"domain"}),               # imports domain
             "infrastructure": frozenset({"domain", "application"}),
         },
-        pure_layers=frozenset({"domain"}),
-        known_frameworks=frozenset({"pytest", "fastapi"}),
+        pure_layers=frozenset({"domain"}),                      # no side effects
+        known_frameworks=frozenset({"pytest", "fastapi"}),      # framework detection
     )
 ```
 
-```python
-# test_architecture.py
+## Architecture
 
-def test_hexagonal_layers(arch):
-    """Verify hexagonal architecture layers."""
-    # Domain imports nothing from other layers
-    arch.modules().in_layer("domain").should().not_import(
-        "myapp.application.**", "myapp.infrastructure.**"
-    ).assert_check()
-
-    # Application doesn't import infrastructure
-    arch.modules().in_layer("application").should().not_import(
-        "myapp.infrastructure.**"
-    ).assert_check()
-
-def test_edge_boundaries(arch_with_graph):
-    """Verify call graph respects layer boundaries."""
-    arch_with_graph.edges().crossing_boundary().should().be_allowed({
-        "application": frozenset({"domain"}),
-        "infrastructure": frozenset({"domain", "application"}),
-    }).assert_check()
-
-def test_graph_level_validation(arch_checker):
-    """Run all validators (cycles, boundaries, DI-aware)."""
-    result = arch_checker.check()
-    assert result.passed, f"Violations: {result.violations}"
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ LAYER 1: DYNAMIC (always works, no config required)                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ discover_layers(app_dir)        → frozenset[str]                            │
+│ discover_modules(app_dir)       → frozenset[str]                            │
+│ load_known_libs(requirements)   → frozenset[str]                            │
+│ StaticCallGraph                 ← AST parsing                               │
+│ RuntimeCallGraph                ← sys.monitoring (PEP 669)                  │
+│ AsyncCallGraph                  ← asyncio.capture_call_graph                │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ LAYER 2: CONFIGURATION (optional, enables validators)                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ allowed_imports    → BoundaryValidator                                      │
+│ pure_layers        → PurityValidator                                        │
+│ max_fan_out        → CouplingValidator                                      │
+│ known_frameworks   → EdgeClassifier (FRAMEWORK nature)                      │
+│ extras             → user's CustomValidator                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ LAYER 3: RULES (adapts to config)                                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ ALWAYS: detect_cycles          graphlib.TopologicalSorter                   │
+│ ALWAYS: build_merged_graph     Static + Runtime + EdgeNature                │
+│ IF config: validators          BoundaryValidator, DIAwareValidator, ...     │
+│ OUTPUT: CheckResult            violations, coverage, merged_graph           │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Available Fixtures
+### MergedCallGraph Structure
 
-| Fixture | Description |
-|---------|-------------|
-| `arch` | ArchCheck for static analysis (modules, classes, functions) |
-| `arch_with_graph` | ArchCheck with MergedCallGraph (supports edges()) |
-| `arch_checker` | ArchChecker facade for graph-level validation |
-| `arch_codebase` | Parsed Codebase |
-| `arch_config` | ArchitectureConfig (override in conftest.py) |
-| `arch_merged_graph` | Static-only MergedCallGraph |
+```
+MergedCallGraph
+├── nodes: frozenset[str]                    all function FQNs
+├── edges: tuple[FunctionEdge, ...]          app→app edges
+├── lib_edges: tuple[LibEdge, ...]           app→lib edges
+├── hidden_deps: frozenset[HiddenDep]        runtime-only (dynamic dispatch)
+│
+├── Index: _idx_by_pair      O(1) lookup by (caller, callee)
+├── Index: _idx_by_caller    O(1) get all callees of function
+├── Index: _idx_by_callee    O(1) get all callers of function
+├── Index: _idx_by_nature    O(1) filter by EdgeNature
+│
+├── Property: direct_edges   precomputed DIRECT edges only
+└── Property: edge_pairs     for cycle detection
+```
+
+## Extensibility
+
+### Custom Validator
+
+```python
+from archcheck import ValidatorProtocol, RuleCategory, Violation
+
+class MaxDepthValidator:
+    category = RuleCategory.CUSTOM
+
+    def __init__(self, max_depth: int) -> None:
+        self._max_depth = max_depth
+
+    def validate(self, graph, config) -> tuple[Violation, ...]:
+        # analyze graph, return violations
+        ...
+
+    @classmethod
+    def from_config(cls, config, registry=None):
+        depth = config.extras.get("max_depth")
+        return cls(depth) if depth else None
+```
+
+### Custom Reporter
+
+```python
+from archcheck import ReporterProtocol, CheckResult
+
+class SlackReporter:
+    def report(self, result: CheckResult) -> None:
+        if not result.passed:
+            slack.post(channel, format_violations(result.violations))
+```
+
+### Custom Predicate
+
+```python
+def is_repository(cls):
+    return cls.name.endswith("Repository")
+
+arch.classes().that(is_repository).should().be_in_layer("infrastructure").assert_check()
+```
 
 ## Comparison
 
 | Feature | import-linter | pytest-archon | PyTestArch | **archcheck** |
-|---------|---------------|---------------|------------|---------------|
-| Import checking | Yes | Yes | Yes | Yes |
-| Runtime analysis | No | No | No | **Yes** (sys.monitoring) |
-| Async analysis | No | No | No | **Yes** (asyncio.capture) |
-| DI-aware validation | No | No | No | **Yes** |
-| Extensible (Protocol) | No | No | No | **Yes** |
-| Hidden deps detection | No | No | No | **Yes** |
-| MergedCallGraph | No | No | No | **Yes** |
-| Function purity | No | No | No | **Yes** |
-| FAIL-FIRST policy | No | No | No | **Yes** |
+|---------|:-------------:|:-------------:|:----------:|:-------------:|
+| Python version | 3.8+ | 3.8+ | 3.8+ | **3.14+** |
+| Import checking | ✓ | ✓ | ✓ | ✓ |
+| Runtime analysis | ✗ | ✗ | ✗ | **✓** sys.monitoring |
+| Async analysis | ✗ | ✗ | ✗ | **✓** asyncio.capture |
+| Edge classification | ✗ | ✗ | ✗ | **✓** DIRECT/PARAMETRIC/INHERITED/FRAMEWORK |
+| DI-aware | ✗ | ✗ | ✗ | **✓** |
+| Hidden deps | ✗ | ✗ | ✗ | **✓** |
+| Fluent DSL | partial | ✗ | ✓ | **✓** |
+| Pattern matching | basic | basic | basic | **✓** `*`, `**`, `?`, `.**` |
+| Call graph | ✗ | ✗ | ✗ | **✓** indexed O(1) |
+| Extensible | config | ✗ | ✗ | **✓** Protocol |
+| pytest fixtures | ✗ | ✓ | ✓ | **✓** 6 fixtures |
+| FAIL-FIRST | ✗ | ✗ | ✗ | **✓** |
+| Immutable types | ✗ | ✗ | ✗ | **✓** |
+| Thread-safe | ✗ | ✗ | ✗ | **✓** |
 
 ## License
 
