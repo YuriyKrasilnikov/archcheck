@@ -1,5 +1,12 @@
 # archcheck
 
+[![Tests](https://github.com/YuriyKrasilnikov/archcheck/actions/workflows/test.yml/badge.svg)](https://github.com/YuriyKrasilnikov/archcheck/actions/workflows/test.yml)
+[![Lint](https://github.com/YuriyKrasilnikov/archcheck/actions/workflows/lint.yml/badge.svg)](https://github.com/YuriyKrasilnikov/archcheck/actions/workflows/lint.yml)
+[![Python 3.14](https://img.shields.io/badge/python-3.14-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![mypy: strict](https://img.shields.io/badge/mypy-strict-blue.svg)](http://mypy-lang.org/)
+
 Extensible framework для статического + runtime анализа архитектуры Python 3.14.
 
 ## Philosophy
