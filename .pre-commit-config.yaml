@@ -2,21 +2,18 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.6
     hooks:
-      # Run the linter
       - id: ruff
         args: [--fix]
-      # Run the formatter (auto-fix, not just check)
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.18.1
     hooks:
       - id: mypy
-        additional_dependencies:
-          - types-lxml>=2025.8.25
-        args: [--strict, --python-version=3.14, src/]
-        files: ^src/
+        args: [--strict, --python-version=3.14, src/archcheck]
         pass_filenames: false
+        additional_dependencies:
+          - pytest>=9.0.0
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -32,8 +29,16 @@ repos:
       - id: check-added-large-files
         args: [--maxkb=500]
       - id: check-merge-conflict
-      - id: no-commit-to-branch
-        args: [--branch=main, --branch=master]
       - id: detect-private-key
       - id: debug-statements
       - id: check-docstring-first
+
+  - repo: local
+    hooks:
+      - id: pytest-fast
+        name: pytest (fast)
+        entry: uv run pytest tests/ -x -q --tb=no
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]

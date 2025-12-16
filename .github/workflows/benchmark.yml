@@ -41,6 +41,9 @@ jobs:
           output-file-path: benchmark-results.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
+          # Create gh-pages branch if not exists
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: dev/bench
           # Alert if performance degrades >110%
           alert-threshold: "110%"
           comment-on-alert: true
