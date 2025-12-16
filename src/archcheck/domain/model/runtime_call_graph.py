@@ -51,6 +51,21 @@ class FrozenRuntimeCallGraph:
         """Total number of calls (sum of all counts)."""
         return sum(self.edges.values()) + sum(self.lib_edges.values())
 
+    @classmethod
+    def empty(cls) -> FrozenRuntimeCallGraph:
+        """Create empty graph for static-only analysis.
+
+        Used when runtime collection is not available.
+
+        Returns:
+            Empty FrozenRuntimeCallGraph with no edges.
+        """
+        return cls(
+            edges=MappingProxyType({}),
+            lib_edges=MappingProxyType({}),
+            called_functions=frozenset(),
+        )
+
 
 @dataclass(slots=True)
 class RuntimeCallGraph:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from archcheck.domain.model.call_instance import CallInstance
@@ -19,6 +21,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from archcheck.domain.model.call_site import CallSite
+    from archcheck.domain.model.codebase import Codebase
+    from archcheck.domain.model.function import Function
     from archcheck.domain.model.lib_call_site import LibCallSite
     from archcheck.domain.model.runtime_call_graph import FrozenRuntimeCallGraph
     from archcheck.domain.model.static_call_graph import StaticCallGraph
@@ -232,3 +236,101 @@ def _categorize_entry_points(
     # TODO: Implement entry point categorization based on patterns
     # For now, return empty categories
     return EntryPointCategories.empty()
+
+
+def build_static_merged_graph(
+    codebase: Codebase,
+    known_frameworks: frozenset[str] | None = None,
+) -> MergedCallGraph:
+    """Build MergedCallGraph from static analysis only.
+
+    Creates FunctionEdges from Codebase without runtime data.
+    Use for static-only architecture testing.
+
+    Args:
+        codebase: Parsed codebase
+        known_frameworks: Framework prefixes for EdgeClassifier
+
+    Returns:
+        MergedCallGraph with static edges
+
+    Raises:
+        TypeError: If codebase is None
+    """
+    if codebase is None:
+        raise TypeError("codebase must not be None")
+
+    frameworks = known_frameworks or frozenset()
+    module_imports = _extract_module_imports(codebase)
+    classifier = EdgeClassifier(module_imports, frameworks)
+
+    # Collect: (caller_fqn, callee_fqn) → [(file, line, call_type), ...]
+    edge_data: dict[tuple[str, str], list[tuple[Path, int, CallType]]] = {}
+    all_functions: set[str] = set()
+
+    for module in codebase.modules.values():
+        for func in module.functions:
+            _collect_static_edges(func, edge_data, all_functions)
+        for cls in module.classes:
+            for method in cls.methods:
+                _collect_static_edges(method, edge_data, all_functions)
+
+    # Build FunctionEdges
+    edges: list[FunctionEdge] = []
+    for (caller_fqn, callee_fqn), call_list in edge_data.items():
+        if caller_fqn == callee_fqn:
+            continue  # Skip self-loops
+
+        call_type = call_list[0][2]
+        nature = classifier.classify(caller_fqn, callee_fqn, call_type)
+
+        calls = tuple(
+            CallInstance(
+                location=Location(file=file, line=line, column=0),
+                call_type=ct,
+                count=1,
+            )
+            for file, line, ct in call_list
+        )
+
+        edges.append(
+            FunctionEdge(
+                caller_fqn=caller_fqn,
+                callee_fqn=callee_fqn,
+                nature=nature,
+                calls=calls,
+            )
+        )
+
+    nodes = all_functions | {e.callee_fqn for e in edges}
+
+    return MergedCallGraph.build(
+        nodes=frozenset(nodes),
+        edges=edges,
+        lib_edges=[],
+        hidden_deps=[],
+        entry_points=EntryPointCategories.empty(),
+    )
+
+
+def _collect_static_edges(
+    func: Function,
+    edge_data: dict[tuple[str, str], list[tuple[Path, int, CallType]]],
+    all_functions: set[str],
+) -> None:
+    """Collect edges from function body_calls."""
+    all_functions.add(func.qualified_name)
+    for call in func.body_calls:
+        if call.is_resolved and call.resolved_fqn is not None:
+            key = (func.qualified_name, call.resolved_fqn)
+            edge_data.setdefault(key, []).append(
+                (func.location.file, call.line, call.call_type)
+            )
+
+
+def _extract_module_imports(codebase: Codebase) -> Mapping[str, frozenset[str]]:
+    """Extract module imports for EdgeClassifier."""
+    result: dict[str, frozenset[str]] = {}
+    for name, module in codebase.modules.items():
+        result[name] = frozenset(imp.module for imp in module.imports)
+    return MappingProxyType(result)
