@@ -22,18 +22,23 @@ uv add archcheck
 ## Quick Start
 
 ```python
-from archcheck.infrastructure import tracking
 from archcheck.application.services.tracker import TrackerService
+from archcheck.application.services.analyzer import AnalyzerService
 from archcheck.application.reporters.console import ConsoleReporter
+from archcheck.domain.graphs import FilterConfig
 
-# Option 1: Low-level API
-tracking.start()
-result = my_function()
-tr = tracking.stop()
-
-# Option 2: TrackerService
+# Track execution
 tracker = TrackerService()
 result, tr = tracker.track(my_function)
+
+# Analyze
+analyzer = AnalyzerService()
+config = FilterConfig(include_paths=("src/*",), exclude_paths=("*test*",))
+analysis = analyzer.analyze(tr, config)
+
+# Results
+print(f"Call edges: {len(analysis.call_graph.edges)}")
+print(f"Objects tracked: {len(analysis.object_flow.objects)}")
 
 # Report
 reporter = ConsoleReporter()
@@ -46,12 +51,18 @@ print(reporter.report(tr))
 src/archcheck/
 ├── domain/
 │   ├── events.py          # Location, CallEvent, ReturnEvent, CreateEvent, DestroyEvent
+│   ├── graphs.py          # CallEdge, CallGraph, ObjectFlow, FilterConfig, AnalysisResult
 │   └── exceptions.py      # ArchCheckError, ConversionError
 ├── infrastructure/
-│   └── tracking.py        # C binding → domain objects
+│   ├── tracking.py        # C binding → domain objects
+│   └── filters/           # Filter functions (pure, stateless)
+│       ├── event_type.py  # include_types(), exclude_types()
+│       ├── path.py        # include_paths(), exclude_paths()
+│       └── composite.py   # all_of(), any_of(), negate()
 └── application/
     ├── services/
-    │   └── tracker.py     # TrackerService
+    │   ├── tracker.py     # TrackerService
+    │   └── analyzer.py    # AnalyzerService
     └── reporters/
         ├── console.py     # ConsoleReporter (rich)
         ├── json.py        # JsonReporter

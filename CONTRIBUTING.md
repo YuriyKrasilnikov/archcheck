@@ -15,11 +15,13 @@ C23 ONLY         : nullptr, constexpr, static_assert, unreachable
 src/archcheck/
 ├── domain/           # Pure types (stdlib only)
 │   ├── events.py     # Location, EventType, *Event, TrackingResult
+│   ├── graphs.py     # CallEdge, CallGraph, ObjectFlow, FilterConfig
 │   └── exceptions.py # ArchCheckError, ConversionError
 ├── infrastructure/   # External adapters
-│   └── tracking.py   # C module binding
+│   ├── tracking.py   # C module binding
+│   └── filters/      # Filter functions (pure, stateless)
 └── application/      # Business logic
-    ├── services/     # TrackerService
+    ├── services/     # TrackerService, AnalyzerService
     └── reporters/    # Console, JSON reporters
 
 c/
@@ -62,6 +64,9 @@ refactor(domain): extract Location
 - [ ] FAIL-FIRST validation in new types
 - [ ] C code uses C23 features
 - [ ] No `type: ignore` or `noqa`
+- [ ] `CHANGELOG.md` updated (new feature / fix / breaking change)
+- [ ] `ROADMAP.md` updated (if milestone completed)
+- [ ] `README.md` updated (if public API changed)
 
 ## License
 

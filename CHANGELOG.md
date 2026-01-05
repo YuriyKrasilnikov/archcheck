@@ -39,6 +39,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ConsoleReporter` — rich-based console output
 - `JsonReporter` — machine-readable JSON
 - `GroupStrategy` — ByTypeStrategy, ByFileStrategy, ByFuncStrategy
+- `AnalyzerService` — `filter()`, `build_call_graph()`, `build_object_flow()`, `analyze()`
+
+**Domain Layer (Graphs)**
+- `CallEdge` — caller → callee with count (FAIL-FIRST: count ≥ 1)
+- `CallGraph` — edges + unmatched events (Data Completeness)
+- `ObjectLifecycle` — obj_id, type_name, created, destroyed, locations
+- `ObjectFlow` — objects + orphan_destroys (Data Completeness)
+- `FilterConfig` — include_paths, exclude_paths, include_types
+- `AnalysisResult` — filtered + call_graph + object_flow
+
+**Infrastructure Layer (Filters)**
+- `Filter` type alias (PEP 695)
+- `include_types()`, `exclude_types()` — filter by EventType
+- `include_paths()`, `exclude_paths()` — filter by fnmatch patterns
+- `all_of()`, `any_of()`, `negate()` — filter composition
 
 ### Changed
 

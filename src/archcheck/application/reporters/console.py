@@ -42,6 +42,7 @@ class ConsoleConfig:
         group_by: Strategy for grouping events. None = ByTypeStrategy().
         include_types: Event types to include. None = all types.
         exclude_paths: Glob patterns for files to exclude.
+        width: Console output width in characters.
     """
 
     show_lifecycle: bool = True
@@ -50,6 +51,7 @@ class ConsoleConfig:
     group_by: GroupStrategy | None = None
     include_types: frozenset[EventType] | None = None
     exclude_paths: tuple[str, ...] = ()
+    width: int = 120
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,7 +87,7 @@ class ConsoleReporter:
             Formatted string with colors and tables.
         """
         output = StringIO()
-        console = Console(file=output, force_terminal=True, width=120)
+        console = Console(file=output, force_terminal=True, width=self._config.width)
 
         events = self._filter_events(result.events)
         summary = self._build_summary(events)

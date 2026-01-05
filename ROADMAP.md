@@ -27,15 +27,27 @@ C extension for runtime data flow tracking.
 - ConsoleReporter, JsonReporter
 - GroupStrategy — ByType, ByFile, ByFunc
 
+### Phase 2: Filtering & Analysis
+
+**Domain:**
+- CallEdge, CallGraph (edges + unmatched)
+- ObjectLifecycle, ObjectFlow (objects + orphan_destroys)
+- FilterConfig, AnalysisResult
+
+**Infrastructure:**
+- Filter type alias (PEP 695)
+- include_types(), exclude_types()
+- include_paths(), exclude_paths() — fnmatch
+- all_of(), any_of(), negate()
+
+**Application:**
+- AnalyzerService — filter(), build_call_graph(), build_object_flow(), analyze()
+
+**Key decision:** Path filters apply only to CALL/RETURN (not CREATE/DESTROY) — object ID is global.
+
 ---
 
 ## Planned
-
-### Phase 2: Filtering & Analysis
-
-- FilterConfig — include/exclude paths, modules, event types
-- AnalyzerService — filter(), build_call_graph(), build_object_flow()
-- CallGraph, ObjectFlow domain types
 
 ### Phase 3: Static Analysis
 

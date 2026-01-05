@@ -35,6 +35,7 @@ class TestConsoleConfig:
         assert config.group_by is None
         assert config.include_types is None
         assert config.exclude_paths == ()
+        assert config.width == 120
 
     def test_custom_values(self) -> None:
         """Custom values can be set."""
@@ -45,10 +46,12 @@ class TestConsoleConfig:
             group_by=ByFileStrategy(),
             include_types=frozenset({EventType.CALL}),
             exclude_paths=("*.pyc",),
+            width=80,
         )
         assert config.show_lifecycle is False
         assert config.max_events == 100
         assert config.include_types == frozenset({EventType.CALL})
+        assert config.width == 80
 
 
 class TestConsoleReporter:
