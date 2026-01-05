@@ -7,29 +7,47 @@ Outputs results in JSON format compatible with github-action-benchmark.
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
+import sys
 import time
 from pathlib import Path
 
+from archcheck.domain.events import CallEvent, Location
+from archcheck.infrastructure import tracking
+
 
 def benchmark_import_time() -> float:
-    """Measure import time of archcheck package."""
+    """Measure import time of archcheck package (already imported, measures reimport)."""
     start = time.perf_counter()
-    import archcheck  # noqa: F401
-
+    importlib.reload(importlib.import_module("archcheck"))
     return time.perf_counter() - start
 
 
 def benchmark_domain_types() -> float:
     """Measure creation time of domain types."""
-    from archcheck.domain.model.call_site import CallSite
-    from archcheck.domain.model.location import Location
-
     start = time.perf_counter()
-    for _ in range(10000):
-        Location(file=Path("test.py"), line=1, column=0)
-        CallSite(module="myapp.module", function="func", line=1, file=Path("test.py"))
+    for i in range(10000):
+        loc = Location(file="test.py", line=i, func="test_func")
+        CallEvent(location=loc, caller=None, args=(), errors=())
     return time.perf_counter() - start
+
+
+def benchmark_tracking() -> float:
+    """Measure tracking overhead."""
+
+    def target() -> int:
+        total = 0
+        for i in range(100):
+            total += i
+        return total
+
+    tracking.start()
+    start = time.perf_counter()
+    target()
+    elapsed = time.perf_counter() - start
+    tracking.stop()
+    return elapsed
 
 
 def main() -> None:
@@ -52,7 +70,7 @@ def main() -> None:
             "name": "Import Time",
             "unit": "seconds",
             "value": import_time,
-        }
+        },
     )
 
     # Domain types creation
@@ -62,14 +80,24 @@ def main() -> None:
             "name": "Domain Types (10k iterations)",
             "unit": "seconds",
             "value": types_time,
-        }
+        },
+    )
+
+    # Tracking overhead
+    tracking_time = benchmark_tracking()
+    results.append(
+        {
+            "name": "Tracking Overhead (100 iterations)",
+            "unit": "seconds",
+            "value": tracking_time,
+        },
     )
 
     # Write results
     args.output.write_text(json.dumps(results, indent=2))
-    print(f"Benchmark results written to {args.output}")
+    sys.stdout.write(f"Benchmark results written to {args.output}\n")
     for r in results:
-        print(f"  {r['name']}: {r['value']:.4f} {r['unit']}")
+        sys.stdout.write(f"  {r['name']}: {r['value']:.4f} {r['unit']}\n")
 
 
 if __name__ == "__main__":

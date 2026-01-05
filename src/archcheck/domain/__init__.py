@@ -1,76 +1,43 @@
-"""archcheck domain layer.
+"""Domain layer: immutable value objects with invariant validation."""
 
-Pure domain logic with no external dependencies.
-Only imports: typing, abc, dataclasses, enum, pathlib, collections.abc
-"""
-
-from archcheck.domain.exceptions import (
-    ArchCheckError,
-    ArchitectureViolationError,
-    ASTError,
-    ParsingError,
-    RuleValidationError,
-)
-from archcheck.domain.model import (
-    ArchitectureDefinition,
-    Class,
-    Codebase,
-    Component,
-    Decorator,
-    DIInfo,
-    Function,
-    Import,
-    Layer,
+from archcheck.domain.events import (
+    ArgInfo,
+    CallEvent,
+    CreateEvent,
+    CreationInfo,
+    DestroyEvent,
+    Event,
+    EventType,
+    FieldError,
     Location,
-    Module,
-    Parameter,
-    PurityInfo,
-    Rule,
-    RuleCategory,
-    RuleResult,
-    Severity,
-    Violation,
-    Visibility,
+    OutputError,
+    ReturnEvent,
+    TrackingResult,
+    get_event_type,
 )
-from archcheck.domain.ports import (
-    ReporterPort,
-    RuleRepositoryPort,
-    SourceParserPort,
+from archcheck.domain.exceptions import (
+    AlreadyActiveError,
+    ArchCheckError,
+    ConversionError,
+    NotExitedError,
 )
 
 __all__ = [
-    # Exceptions
+    "AlreadyActiveError",
     "ArchCheckError",
-    "ParsingError",
-    "ASTError",
-    "RuleValidationError",
-    "ArchitectureViolationError",
-    # Enums
-    "Visibility",
-    "Severity",
-    "RuleCategory",
-    # Value objects
+    "ArgInfo",
+    "CallEvent",
+    "ConversionError",
+    "CreateEvent",
+    "CreationInfo",
+    "DestroyEvent",
+    "Event",
+    "EventType",
+    "FieldError",
     "Location",
-    "Decorator",
-    "Parameter",
-    "PurityInfo",
-    "DIInfo",
-    # Entities
-    "Import",
-    "Function",
-    "Class",
-    "Module",
-    "Codebase",
-    # Rules
-    "Rule",
-    "RuleResult",
-    "Violation",
-    # Architecture
-    "Layer",
-    "Component",
-    "ArchitectureDefinition",
-    # Ports
-    "SourceParserPort",
-    "RuleRepositoryPort",
-    "ReporterPort",
+    "NotExitedError",
+    "OutputError",
+    "ReturnEvent",
+    "TrackingResult",
+    "get_event_type",
 ]

@@ -9,118 +9,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-**Presentation Layer (Fluent DSL)**
-- `ArchCheck` entry point with `modules()`, `classes()`, `functions()`, `edges()`
-- `ModuleQuery` / `ModuleAssertion` — module-level checks
-- `ClassQuery` / `ClassAssertion` — class-level checks
-- `FunctionQuery` / `FunctionAssertion` — function-level checks
-- `EdgeQuery` / `EdgeAssertion` — call graph edge checks
-- Pattern matching (`*`, `**`, `?`) with `compile_pattern()`
-- Query filters: `in_layer()`, `in_package()`, `matching()`, `named()`, `that()`
-- Assertions: `not_import()`, `only_import()`, `be_in_layer()`, `extend()`, `implement()`
-- Edge filters: `from_layer()`, `to_layer()`, `crossing_boundary()`, `direct_only()`
-- Edge assertions: `not_cross_boundary()`, `be_allowed()`
-- Execution: `assert_check()`, `collect()`, `is_valid()`
+**C Tracking Module**
+- C23 standard: `nullptr`, `constexpr`, `static_assert`, `unreachable()`
+- GCC 15.2.0 required
+- Multi-phase module init with `Py_MOD_GIL_USED` for Python 3.14
+- PyRefTracer API for CREATE/DESTROY events
+- Frame evaluator hook for CALL/RETURN events
+- Hash table for object creation tracking
+- Cognitive complexity < 25 for all functions
+- Headers: constants.h, types.h, memory.h, errors.h, events.h, output.h
 
-**pytest Plugin**
-- `arch` fixture — ArchCheck for static analysis
-- `arch_with_graph` fixture — ArchCheck with MergedCallGraph (edges support)
-- `arch_checker` fixture — ArchChecker facade for graph-level validation
-- `arch_codebase` fixture — parsed Codebase
-- `arch_config` fixture — user-overridable ArchitectureConfig
-- `arch_merged_graph` fixture — static-only MergedCallGraph
-- INI options: `arch_source_dir`, `arch_package`
+**Domain Layer**
+- `Location` — file, line, func (frozen dataclass)
+- `EventType` — CALL, RETURN, CREATE, DESTROY
+- `CallEvent` — location, caller, args
+- `ReturnEvent` — location, return value info
+- `CreateEvent` — object id, type name, location
+- `DestroyEvent` — object id, type name, creation context
+- `TrackingResult` — events tuple, output errors
+- `ArchCheckError`, `ConversionError` — FAIL-FIRST exceptions
 
-**Infrastructure**
-- `build_static_merged_graph()` — build MergedCallGraph from static analysis only
-- `FrozenRuntimeCallGraph.empty()` — factory for static-only analysis
+**Infrastructure Layer**
+- `tracking.py` — C binding with domain conversion
+- `start()`, `stop()`, `count()`, `is_active()`, `get_origin()`
+- FAIL-FIRST validation on C output
 
-**Architecture**
-- Three-layer data architecture (Dynamic → Config → Rules)
-- Extensibility via Protocol + Composition pattern
-- Registry pattern for internal extensibility
-
-**Edge Architecture**
-- `EdgeNature` enum: DIRECT, PARAMETRIC, INHERITED, FRAMEWORK
-- `CallInstance` — single call with Location, CallType, count
-- `FunctionEdge` — edge between functions with nature classification
-- `LibEdge` — edge from app to library
-- `MergedCallGraph` rewritten with O(1) indexed access:
-  - `_idx_by_pair`: (caller, callee) → FunctionEdge
-  - `_idx_by_caller`: caller → frozenset[callees]
-  - `_idx_by_callee`: callee → frozenset[callers]
-  - `_idx_by_nature`: EdgeNature → tuple[FunctionEdge]
-  - `direct_edges`: precomputed DIRECT edges only
-  - `edge_pairs`: for cycle detection
-- `EdgeClassifier` — classifies edge nature based on imports and frameworks
-- `build_module_imports()` — extracts imports per module from Codebase
-
-**Domain Types**
-- Runtime types: CallSite, LibCallSite, CalleeKind, CalleeInfo
-- Runtime graphs: RuntimeCallGraph (thread-safe), AsyncCallGraph, CombinedCallGraph
-- Merged types: MergedCallGraph, HiddenDep, HiddenDepType, EntryPointCategories
-- Validation types: LayerViolation, CheckResult
-- Coverage types: FunctionInfo, CoverageReport
-- Configuration: ArchitectureConfig with extras for user extensions
-- Static analysis: StaticCallGraph, StaticCallEdge, CallType
-
-**Ports (Protocols)**
-- VisitorProtocol — contract for AST visitors
-- ValidatorProtocol — contract for validators with from_config()
-- ReporterProtocol — contract for reporters (NOT rich-specific)
-- CollectorProtocol — contract for runtime collectors
-
-**Validators**
-- CycleValidator — always enabled, uses graphlib.TopologicalSorter
-- BoundaryValidator — if config.allowed_imports
-- PurityValidator — if config.pure_layers
-- CouplingValidator — if config.max_fan_out
-- DIAwareValidator — understands DI pattern (impl→interface OK)
-
-**Runtime Collectors (Python 3.14)**
-- CallGraphCollector — sys.monitoring (PEP 669)
-- AsyncCallGraphCollector — asyncio.capture_call_graph()
-- RuntimeArchCollector — combined sync + async
-
-**Reporters**
-- PlainTextReporter — stdlib only
-- JSONReporter — machine-readable output
-
-**Discovery**
-- discover_layers() — from filesystem
-- discover_modules() — from filesystem
-- load_known_libs() — from requirements/*.txt
-
-**Merge**
-- build_merged_graph() — AST + Runtime with edge aggregation and classification
-- detect_hidden_deps() — Runtime ∖ AST (only DYNAMIC now)
+**Application Layer**
+- `TrackerService` — `track()`, `track_context()`
+- `ConsoleReporter` — rich-based console output
+- `JsonReporter` — machine-readable JSON
+- `GroupStrategy` — ByTypeStrategy, ByFileStrategy, ByFuncStrategy
 
 ### Changed
 
-- `_BUILTINS` — discover via `frozenset(dir(builtins))` instead of hardcode
-- `detect_cycles()` — use stdlib `graphlib.TopologicalSorter`
-- `RuleCategory` — extended with BOUNDARIES, COUPLING, COHESION, ISOLATION, CONTRACTS, QUALITY, RUNTIME
-- `ArchitectureDefinition` — frozen + Builder pattern
-- `ReporterPort` — changed to Protocol-based (CheckResult instead of Violation/Summary)
-- `build_merged_graph()` — now requires `module_imports` and `known_frameworks` parameters
-- `HiddenDepType` — only DYNAMIC remains (PARAMETRIC/FRAMEWORK moved to EdgeNature)
-- Validators now use `direct_edges` (BoundaryValidator, DIAwareValidator)
-- CycleValidator now uses `edge_pairs` for O(1) access
-- `_registry.py` uses `type[BaseValidator]` instead of `type[ValidatorProtocol]`
-
-### Fixed
-
-- RuleValidationError — added FAIL-FIRST validation in __init__
-- FunctionEdge — forbids self-loops (caller_fqn == callee_fqn → ValueError)
+- License changed from MIT to Apache 2.0
+- Complete architecture rewrite
+- Removed old domain model, validators, collectors, analyzers
+- Removed presentation layer (DSL, pytest plugin) — will be reimplemented in Phase 5
 
 ## [0.1.0] - Initial
 
 ### Added
-- Initial project structure (Hexagonal Architecture)
-- Domain model: Module, Class, Function, Import, Location
-- Domain model: Rule, Violation, RuleResult
-- Domain model: DiGraph with FAIL-FIRST invariants
-- AST analyzers: import, decorator, body, function, class
-- Basic predicates: module, class, function
-- Fluent API skeleton
-- pytest plugin skeleton
+- Initial project structure

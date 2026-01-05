@@ -1,4 +1,0 @@
-# Core dependencies
-# pip-compile requirements/base.in -o requirements/base.txt
-
-# No runtime dependencies - pure stdlib

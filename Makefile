@@ -1,4 +1,4 @@
-.PHONY: help install dev-setup test test-unit test-integration lint format type-check check clean build publish benchmark deps deps-upgrade deps-sync
+.PHONY: help install dev-setup test test-unit test-integration lint format type-check check clean build publish benchmark
 
 help:
 	@echo "archcheck development commands:"
@@ -25,13 +25,6 @@ help:
 	@echo ""
 	@echo "Performance:"
 	@echo "  make benchmark     - Run performance benchmarks"
-	@echo "  make profile       - Profile code execution time"
-	@echo "  make memory-check  - Check memory usage"
-	@echo ""
-	@echo "Dependencies:"
-	@echo "  make deps          - Compile .in → .txt (locked versions)"
-	@echo "  make deps-upgrade  - Upgrade all deps to latest"
-	@echo "  make deps-sync     - Install from locked .txt files"
 
 install:
 	@echo "Installing archcheck in development mode..."
@@ -50,12 +43,11 @@ test:
 		--cov-report=html \
 		--cov-report=term \
 		--cov-report=xml \
-		-n auto \
 		-v
 
 test-unit:
 	@echo "Running unit tests..."
-	uv run pytest tests/unit/ -n auto -v
+	uv run pytest tests/unit/ -v
 
 test-integration:
 	@echo "Running integration tests..."
@@ -102,46 +94,4 @@ publish: build
 
 benchmark:
 	@echo "Running performance benchmarks..."
-	uv run pytest tests/benchmark/ -v --benchmark-only
-
-profile:
-	@echo "Profiling code execution..."
-	uv run python -m cProfile -o profile.stats scripts/benchmark.py
-	uv run python -m pstats profile.stats -s cumulative | head -n 30
-	@echo "Full stats saved to profile.stats"
-
-memory-check:
-	@echo "Checking memory usage with tracemalloc..."
-	uv run python -X tracemalloc=5 scripts/benchmark.py
-
-coverage-report:
-	@echo "Generating detailed coverage report..."
-	uv run pytest --cov=archcheck --cov-report=html --cov-report=term-missing
-	@echo "HTML report: htmlcov/index.html"
-
-mutation-test:
-	@echo "Running mutation tests on domain..."
-	uv run mutmut run
-
-# =============================================================================
-# Dependency Management
-# =============================================================================
-
-deps:
-	@echo "Compiling requirements/*.in → requirements/*.txt..."
-	uv pip compile requirements/base.in -o requirements/base.txt
-	uv pip compile requirements/dev.in -o requirements/dev.txt
-	uv pip compile requirements/docs.in -o requirements/docs.txt
-	@echo "Requirements compiled!"
-
-deps-upgrade:
-	@echo "Upgrading all dependencies to latest versions..."
-	uv pip compile requirements/base.in -o requirements/base.txt --upgrade
-	uv pip compile requirements/dev.in -o requirements/dev.txt --upgrade
-	uv pip compile requirements/docs.in -o requirements/docs.txt --upgrade
-	@echo "Dependencies upgraded!"
-
-deps-sync:
-	@echo "Installing from locked requirements..."
-	uv pip sync requirements/dev.txt
-	@echo "Dependencies installed!"
+	uv run python scripts/benchmark.py --output benchmark-results.json
