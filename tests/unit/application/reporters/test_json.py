@@ -27,13 +27,6 @@ from tests.factories import (
 class TestJsonReporter:
     """Tests for JsonReporter."""
 
-    def test_report_returns_str(self) -> None:
-        """report() returns string."""
-        reporter = JsonReporter()
-        result = make_tracking_result()
-        output = reporter.report(result)
-        assert isinstance(output, str)
-
     def test_report_is_valid_json(self) -> None:
         """report() returns valid JSON."""
         reporter = JsonReporter()

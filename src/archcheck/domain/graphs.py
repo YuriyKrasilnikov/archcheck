@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from archcheck.domain.exceptions import InvalidCountError, ObjectIdMismatchError
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -41,8 +43,7 @@ class CallEdge:
     def __post_init__(self) -> None:
         """Validate invariants. FAIL-FIRST on invalid count."""
         if self.count < 1:
-            msg = f"count must be >= 1, got {self.count}"
-            raise ValueError(msg)
+            raise InvalidCountError(self.count)
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,8 +82,7 @@ class ObjectLifecycle:
     def __post_init__(self) -> None:
         """Validate invariants. FAIL-FIRST on obj_id mismatch."""
         if self.destroyed is not None and self.destroyed.obj_id != self.obj_id:
-            msg = f"obj_id mismatch: lifecycle={self.obj_id}, destroyed={self.destroyed.obj_id}"
-            raise ValueError(msg)
+            raise ObjectIdMismatchError(self.obj_id, self.destroyed.obj_id)
 
 
 @dataclass(frozen=True, slots=True)

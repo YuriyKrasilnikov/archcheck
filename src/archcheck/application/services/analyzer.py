@@ -16,6 +16,7 @@ from archcheck.domain.events import (
     TrackingResult,
     get_event_type,
 )
+from archcheck.domain.exceptions import DuplicateCreateError
 from archcheck.domain.graphs import (
     AnalysisResult,
     CallEdge,
@@ -172,8 +173,7 @@ class AnalyzerService:
                 case CreateEvent():
                     if event.obj_id in creates:
                         # Duplicate CREATE without DESTROY - error (C bug)
-                        msg = f"Duplicate CREATE for obj_id={event.obj_id} without DESTROY"
-                        raise ValueError(msg)
+                        raise DuplicateCreateError(event.obj_id)
                     creates[event.obj_id] = (event, [])
 
                 case DestroyEvent():

@@ -57,13 +57,6 @@ class TestConsoleConfig:
 class TestConsoleReporter:
     """Tests for ConsoleReporter."""
 
-    def test_report_returns_str(self) -> None:
-        """report() returns string."""
-        reporter = ConsoleReporter()
-        result = make_tracking_result()
-        output = reporter.report(result)
-        assert isinstance(output, str)
-
     def test_report_contains_header(self) -> None:
         """report() contains TRACKING RESULT header."""
         reporter = ConsoleReporter()

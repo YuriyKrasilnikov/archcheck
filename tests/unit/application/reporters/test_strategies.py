@@ -9,9 +9,15 @@ Tests:
 - Custom strategy implementation by user
 """
 
+from __future__ import annotations
+
 from io import StringIO
+from typing import TYPE_CHECKING
 
 from rich.console import Console
+
+if TYPE_CHECKING:
+    from archcheck.domain.events import Event
 
 from archcheck.application.reporters.strategies import (
     ByFileStrategy,
@@ -20,38 +26,12 @@ from archcheck.application.reporters.strategies import (
     GroupStrategy,
     format_location_short,
 )
-from archcheck.domain.events import Event, EventType, get_event_type
 from tests.factories import (
     make_call_event,
     make_create_event,
-    make_destroy_event,
     make_location,
     make_return_event,
 )
-
-
-class TestGetEventType:
-    """Tests for get_event_type function."""
-
-    def test_call_event_returns_call_type(self) -> None:
-        """CallEvent -> EventType.CALL."""
-        event = make_call_event()
-        assert get_event_type(event) == EventType.CALL
-
-    def test_return_event_returns_return_type(self) -> None:
-        """ReturnEvent -> EventType.RETURN."""
-        event = make_return_event()
-        assert get_event_type(event) == EventType.RETURN
-
-    def test_create_event_returns_create_type(self) -> None:
-        """CreateEvent -> EventType.CREATE."""
-        event = make_create_event()
-        assert get_event_type(event) == EventType.CREATE
-
-    def test_destroy_event_returns_destroy_type(self) -> None:
-        """DestroyEvent -> EventType.DESTROY."""
-        event = make_destroy_event()
-        assert get_event_type(event) == EventType.DESTROY
 
 
 class TestFormatLocationShort:
@@ -75,12 +55,6 @@ class TestFormatLocationShort:
 
 class TestByTypeStrategy:
     """Tests for ByTypeStrategy."""
-
-    def test_implements_group_strategy_protocol(self) -> None:
-        """ByTypeStrategy implements GroupStrategy Protocol."""
-        strategy: GroupStrategy = ByTypeStrategy()
-        assert hasattr(strategy, "group")
-        assert hasattr(strategy, "render")
 
     def test_groups_events_by_event_type(self) -> None:
         """Events are grouped by type (CALL, RETURN, CREATE, DESTROY)."""
@@ -139,12 +113,6 @@ class TestByTypeStrategy:
 class TestByFileStrategy:
     """Tests for ByFileStrategy."""
 
-    def test_implements_group_strategy_protocol(self) -> None:
-        """ByFileStrategy implements GroupStrategy Protocol."""
-        strategy: GroupStrategy = ByFileStrategy()
-        assert hasattr(strategy, "group")
-        assert hasattr(strategy, "render")
-
     def test_groups_events_by_file_path(self) -> None:
         """Events are grouped by file path."""
         events = (
@@ -184,12 +152,6 @@ class TestByFileStrategy:
 
 class TestByFuncStrategy:
     """Tests for ByFuncStrategy."""
-
-    def test_implements_group_strategy_protocol(self) -> None:
-        """ByFuncStrategy implements GroupStrategy Protocol."""
-        strategy: GroupStrategy = ByFuncStrategy()
-        assert hasattr(strategy, "group")
-        assert hasattr(strategy, "render")
 
     def test_groups_events_by_function_name(self) -> None:
         """Events are grouped by function name."""

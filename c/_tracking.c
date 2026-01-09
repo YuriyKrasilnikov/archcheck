@@ -29,6 +29,49 @@
 #include "tracking/events.h"
 #include "tracking/output.h"
 
+/* New module: thread-safe barrier for safe termination */
+#include "tracking/barrier.h"
+
+/* Execution context: thread_id, coro_id, timestamp_ns */
+#include "tracking/context.h"
+
+/* ============================================================================
+ * Python Runtime Context Implementation
+ *
+ * context_coro_id() and context_task_id() are declared in context.h
+ * but require Python.h access, so implemented here.
+ * ============================================================================ */
+
+uint64_t context_coro_id(void) {
+    PyThreadState *tstate = PyThreadState_Get();
+    if (tstate == nullptr) {
+        return 0;
+    }
+
+    _PyInterpreterFrame *frame = tstate->current_frame;
+    if (frame == nullptr) {
+        return 0;
+    }
+
+    _PyStackRef exec_ref = frame->f_executable;
+    if (PyStackRef_IsNull(exec_ref)) {
+        return 0;
+    }
+
+    PyObject *executable = PyStackRef_AsPyObjectBorrow(exec_ref);
+    if (PyCoro_CheckExact(executable) || PyAsyncGen_CheckExact(executable)) {
+        return (uint64_t)executable;
+    }
+
+    return 0;
+}
+
+uint64_t context_task_id(void) {
+    /* Phase 5 stub: asyncio task tracking not implemented.
+     * Full implementation requires asyncio.current_task() C API. */
+    return 0;
+}
+
 /* ============================================================================
  * Global state
  * ============================================================================ */
@@ -115,19 +158,28 @@ static PyObject* tracking_frame_evaluator(
         goto call_original;
     }
 
+    /* CRITICAL: Enter barrier-protected section.
+     * This prevents use-after-free when py_stop() called during eval. */
+    if (!barrier_try_enter()) {
+        goto call_original;  /* Stopping, skip tracking */
+    }
+
     /* Get code object */
     _PyStackRef exec_ref = frame->f_executable;
     if (PyStackRef_IsNull(exec_ref)) {
+        barrier_leave();
         goto call_original;
     }
     PyObject *executable = PyStackRef_AsPyObjectBorrow(exec_ref);
     if (!PyCode_Check(executable)) {
+        barrier_leave();
         goto call_original;
     }
     PyCodeObject *code = (PyCodeObject *)executable;
 
     /* Ensure space for CALL + RETURN */
     if (!ensure_events_capacity(2)) {
+        barrier_leave();
         goto call_original;
     }
 
@@ -147,7 +199,11 @@ static PyObject* tracking_frame_evaluator(
      * After original_eval events may be realloc'd or freed. */
     FrameInfo saved_location = call_event->location;
 
-    /* Call original evaluator */
+    /* Leave barrier before calling original eval (allows nested calls).
+     * Re-enter after to record RETURN event. */
+    barrier_leave();
+
+    /* Call original evaluator (may be long-running, allows py_stop()) */
     PyObject *result = invoke_original_eval(tstate, frame, throwflag);
 
     /* Pop from call stack */
@@ -155,13 +211,21 @@ static PyObject* tracking_frame_evaluator(
         stack_depth--;
     }
 
-    /* Safety: stop() may have been called during original_eval */
+    /* Re-enter barrier for RETURN event */
+    if (!barrier_try_enter()) {
+        /* Stopping during eval, skip RETURN event */
+        return result;
+    }
+
+    /* Safety: stop() may have been called during original_eval. */
     if (!tracking_active || !events) {
+        barrier_leave();
         return result;
     }
 
     /* Re-check capacity (nested calls may have consumed it) */
     if (!ensure_events_capacity(1)) {
+        barrier_leave();
         return result;
     }
 
@@ -170,6 +234,7 @@ static PyObject* tracking_frame_evaluator(
     memset(ret_event, 0, sizeof(Event));
     fill_return_event(ret_event, &saved_location, result);
 
+    barrier_leave();
     return result;
 
 call_original:
@@ -257,6 +322,11 @@ static int ref_tracer_callback(PyObject *obj, PyRefTracerEvent event, void *data
         return 0;
     }
 
+    /* Enter barrier-protected section */
+    if (!barrier_try_enter()) {
+        return 0;  /* Stopping, skip tracking */
+    }
+
     uintptr_t obj_id = (uintptr_t)obj;
     const char *type_name = Py_TYPE(obj)->tp_name;
 
@@ -269,6 +339,7 @@ static int ref_tracer_callback(PyObject *obj, PyRefTracerEvent event, void *data
             break;
     }
 
+    barrier_leave();
     return 0;
 }
 
@@ -290,6 +361,9 @@ static PyObject* py_start(PyObject *self, PyObject *args) {
     vt_cleanup(&obj_creation_map);
     vt_init(&obj_creation_map);
     stack_depth = 0;
+
+    /* Initialize stop barrier for safe termination */
+    barrier_init();
 
     /* Set up frame eval hook */
     PyInterpreterState *interp = PyInterpreterState_Get();
@@ -319,6 +393,16 @@ static PyObject* py_stop(PyObject *self, PyObject *args) {
 
     tracking_active = 0;
 
+    /* CRITICAL: Wait for all in-flight frame evaluations via barrier.
+     * This prevents use-after-free when stop() called during callback. */
+    StopResult stop_result = barrier_stop();
+    if (stop_result == STOP_FROM_CALLBACK) {
+        /* Cannot stop from within a tracked function call */
+        tracking_active = 1;  /* Restore state */
+        PyErr_SetString(PyExc_RuntimeError, "Cannot stop() from tracked callback");
+        return nullptr;
+    }
+
     /* Restore original frame evaluator */
     PyInterpreterState *interp = PyInterpreterState_Get();
     _PyInterpreterState_SetEvalFrameFunc(interp, original_eval);
@@ -326,6 +410,9 @@ static PyObject* py_stop(PyObject *self, PyObject *args) {
 
     /* Clear PyRefTracer */
     PyRefTracer_SetTracer(nullptr, nullptr);
+
+    /* Destroy barrier NOW — all hooks disabled, no more callbacks possible */
+    barrier_destroy();
 
     /* Track output errors */
     OutputErrors output_errors = {0};
@@ -368,6 +455,7 @@ static PyObject* py_stop(PyObject *self, PyObject *args) {
 
     free_events();
     vt_cleanup(&obj_creation_map);
+    /* barrier already destroyed after hooks disabled (line 375) */
     return result_dict;
 }
 
@@ -437,7 +525,18 @@ static int module_exec(PyObject *module) {
 
 /**
  * Module slots for Python 3.14+ free-threading support.
- * Py_MOD_GIL_USED: module requires GIL (safe default).
+ *
+ * Current: Py_MOD_GIL_USED (safe default, GIL re-enabled on module load)
+ *
+ * PREREQUISITE for Py_MOD_GIL_NOT_USED (full free-threaded support):
+ *   1. C atomics: DONE (barrier.c, interning.c)
+ *   2. SafeCallback._lock: DONE (PHASE01 Section 1.6)
+ *   3. Per-thread builders: PHASE02 Section 2.5 (builder.py)
+ *
+ * Without per-thread builders, parallel callbacks race on shared OMEGABuilder.
+ * See: tests/unit/infrastructure/test_free_threaded_builder.py
+ *
+ * TODO(PHASE02 step 12): After builder.py → Py_MOD_GIL_NOT_USED
  */
 static PyModuleDef_Slot module_slots[] = {
     {Py_mod_exec, module_exec},

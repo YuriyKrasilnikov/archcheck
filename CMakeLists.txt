@@ -35,7 +35,16 @@ endif()
 find_package(Python 3.14 REQUIRED COMPONENTS Interpreter Development.Module)
 
 # C extension module
-python_add_library(_tracking MODULE c/_tracking.c WITH_SOABI)
+python_add_library(_tracking MODULE
+    c/_tracking.c
+    c/barrier.c
+    c/frame.c
+    c/interning.c
+    WITH_SOABI
+)
+
+# Include path for headers
+target_include_directories(_tracking PRIVATE ${CMAKE_SOURCE_DIR}/c)
 
 # Install to archcheck package
 install(TARGETS _tracking DESTINATION archcheck)
